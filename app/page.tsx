@@ -6,7 +6,7 @@ const page = () => {
   return (
     <section>
       <h1 className="text-center">
-        The Hub For Every Dev Events You Can't Miss
+        The Hub For Every Dev Events You Can&apos;t Miss
       </h1>
       <p className="text-center mt-5">
         Hackathons, Meetups, Conferences, All in one place.
