@@ -3,10 +3,6 @@ import mongoose, { Connection } from "mongoose";
 // Connection URI from environment variables
 const MONGODB_URI = process.env.MONGODB_URI || "";
 
-if (!MONGODB_URI) {
-  throw new Error("Please define the MONGODB_URI environment variable");
-}
-
 // Cached connection interface for global storage
 interface MongooseCache {
   conn: Connection | null;
@@ -38,6 +34,10 @@ async function connectToDatabase(): Promise<Connection> {
 
   // Create new connection promise if none exists
   if (!cached.promise) {
+    if (!MONGODB_URI) {
+      throw new Error("Please define the MONGODB_URI environment variable");
+    }
+
     const opts: mongoose.ConnectOptions = {
       bufferCommands: false, // Disable buffering for faster failure detection
     };
