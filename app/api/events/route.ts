@@ -4,6 +4,51 @@ import { Event } from "@/database";
 import connectToDatabase from "@/lib/mongodb";
 import { NextRequest, NextResponse } from "next/server";
 
+function parseRequiredJsonStringArray(
+  formData: FormData,
+  fieldName: string,
+): { data: string[] } | { error: NextResponse } {
+  try {
+    const raw = formData.get(fieldName);
+    if (!raw) {
+      return {
+        error: NextResponse.json(
+          { message: `${fieldName} field is required` },
+          { status: 400 },
+        ),
+      };
+    }
+    const parsed: unknown = JSON.parse(raw.toString());
+    if (!Array.isArray(parsed)) {
+      return {
+        error: NextResponse.json(
+          { message: `${fieldName} must be a JSON array` },
+          { status: 400 },
+        ),
+      };
+    }
+    const invalidIndex = parsed.findIndex(
+      (item: unknown) => typeof item !== "string",
+    );
+    if (invalidIndex !== -1) {
+      return {
+        error: NextResponse.json(
+          { message: `${fieldName}[${invalidIndex}] must be a string` },
+          { status: 400 },
+        ),
+      };
+    }
+    return { data: parsed as string[] };
+  } catch {
+    return {
+      error: NextResponse.json(
+        { message: `Invalid JSON for ${fieldName}` },
+        { status: 400 },
+      ),
+    };
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     await connectToDatabase();
@@ -40,70 +85,13 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    let tags: unknown;
-    let agenda: unknown;
+    const tagsResult = parseRequiredJsonStringArray(formData, "tags");
+    if ("error" in tagsResult) return tagsResult.error;
+    const tags = tagsResult.data;
 
-    try {
-      const rawTags = formData.get("tags");
-      if (!rawTags) {
-        return NextResponse.json(
-          { message: "Tags field is required" },
-          { status: 400 },
-        );
-      }
-      tags = JSON.parse(rawTags.toString());
-      if (!Array.isArray(tags)) {
-        return NextResponse.json(
-          { message: "Tags must be a JSON array" },
-          { status: 400 },
-        );
-      }
-      const invalidTagIndex = tags.findIndex(
-        (item: unknown) => typeof item !== "string",
-      );
-      if (invalidTagIndex !== -1) {
-        return NextResponse.json(
-          { message: `tags[${invalidTagIndex}] must be a string` },
-          { status: 400 },
-        );
-      }
-    } catch {
-      return NextResponse.json(
-        { message: "Invalid JSON for tags" },
-        { status: 400 },
-      );
-    }
-
-    try {
-      const rawAgenda = formData.get("agenda");
-      if (!rawAgenda) {
-        return NextResponse.json(
-          { message: "Agenda field is required" },
-          { status: 400 },
-        );
-      }
-      agenda = JSON.parse(rawAgenda.toString());
-      if (!Array.isArray(agenda)) {
-        return NextResponse.json(
-          { message: "Agenda must be a JSON array" },
-          { status: 400 },
-        );
-      }
-      const invalidAgendaIndex = agenda.findIndex(
-        (item: unknown) => typeof item !== "string",
-      );
-      if (invalidAgendaIndex !== -1) {
-        return NextResponse.json(
-          { message: `agenda[${invalidAgendaIndex}] must be a string` },
-          { status: 400 },
-        );
-      }
-    } catch {
-      return NextResponse.json(
-        { message: "Invalid JSON for agenda" },
-        { status: 400 },
-      );
-    }
+    const agendaResult = parseRequiredJsonStringArray(formData, "agenda");
+    if ("error" in agendaResult) return agendaResult.error;
+    const agenda = agendaResult.data;
 
     // Upload image to Cloudinary
     const arrayBuffer = await file.arrayBuffer();
