@@ -23,18 +23,9 @@ export async function POST(req: NextRequest) {
     const eventData: Record<string, unknown> = {};
 
     formData.forEach((value, key) => {
-      // Skip the image file as we've already extracted it
-      if (key === "image") return;
-
-      // Handle array fields (agenda, tags)
-      if (key === "agenda" || key === "tags") {
-        if (!eventData[key]) {
-          eventData[key] = [];
-        }
-        (eventData[key] as unknown[]).push(value.toString());
-      } else {
-        eventData[key] = value.toString();
-      }
+      // Skip image (handled above) and agenda/tags (parsed explicitly below)
+      if (key === "image" || key === "agenda" || key === "tags") return;
+      eventData[key] = value.toString();
     });
 
     // Normalize mode to match enum values
@@ -49,8 +40,52 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const tags = JSON.parse(formData.get("tags") as string);
-    const agenda = JSON.parse(formData.get("agenda") as string);
+    let tags: unknown;
+    let agenda: unknown;
+
+    try {
+      const rawTags = formData.get("tags");
+      if (!rawTags) {
+        return NextResponse.json(
+          { message: "Tags field is required" },
+          { status: 400 },
+        );
+      }
+      tags = JSON.parse(rawTags.toString());
+      if (!Array.isArray(tags)) {
+        return NextResponse.json(
+          { message: "Tags must be a JSON array" },
+          { status: 400 },
+        );
+      }
+    } catch {
+      return NextResponse.json(
+        { message: "Invalid JSON for tags" },
+        { status: 400 },
+      );
+    }
+
+    try {
+      const rawAgenda = formData.get("agenda");
+      if (!rawAgenda) {
+        return NextResponse.json(
+          { message: "Agenda field is required" },
+          { status: 400 },
+        );
+      }
+      agenda = JSON.parse(rawAgenda.toString());
+      if (!Array.isArray(agenda)) {
+        return NextResponse.json(
+          { message: "Agenda must be a JSON array" },
+          { status: 400 },
+        );
+      }
+    } catch {
+      return NextResponse.json(
+        { message: "Invalid JSON for agenda" },
+        { status: 400 },
+      );
+    }
 
     // Upload image to Cloudinary
     const arrayBuffer = await file.arrayBuffer();
