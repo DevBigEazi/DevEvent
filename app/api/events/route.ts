@@ -83,6 +83,11 @@ export async function POST(req: NextRequest) {
       } else if (modeStr.includes("offline") || modeStr.includes("person")) {
         eventData.mode = "offline";
       }
+    } else {
+      return NextResponse.json(
+        { message: "Invalid mode. Must be hybrid, online, or offline" },
+        { status: 400 },
+      );
     }
 
     const tagsResult = parseRequiredJsonStringArray(formData, "tags");
@@ -134,7 +139,10 @@ export async function GET(req: NextRequest) {
     await connectToDatabase();
 
     const { searchParams } = new URL(req.url);
-    const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10) || 1);
+    const page = Math.max(
+      1,
+      parseInt(searchParams.get("page") ?? "1", 10) || 1,
+    );
     const limit = Math.min(
       100,
       Math.max(1, parseInt(searchParams.get("limit") ?? "20", 10) || 20),

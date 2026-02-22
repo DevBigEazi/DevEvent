@@ -123,8 +123,10 @@ const EventSchema = new Schema<IEvent>(
   },
   {
     timestamps: true, // Automatically manage createdAt and updatedAt
-  }
+  },
 );
+
+EventSchema.index({ createdAt: -1 });
 
 // Pre-save hook: Generate slug, normalize date and time
 EventSchema.pre("save", function () {
