@@ -5,6 +5,7 @@ import Event from "./event.model";
 export interface IBooking extends Document {
   eventId: mongoose.Types.ObjectId;
   email: string;
+  slug: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -26,6 +27,9 @@ const BookingSchema = new Schema<IBooking>(
         /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
         "Please provide a valid email address",
       ],
+    },
+    slug: {
+      type: String
     },
   },
   {
