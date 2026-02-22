@@ -4,6 +4,51 @@ import { Event } from "@/database";
 import connectToDatabase from "@/lib/mongodb";
 import { NextRequest, NextResponse } from "next/server";
 
+function parseRequiredJsonStringArray(
+  formData: FormData,
+  fieldName: string,
+): { data: string[] } | { error: NextResponse } {
+  try {
+    const raw = formData.get(fieldName);
+    if (!raw) {
+      return {
+        error: NextResponse.json(
+          { message: `${fieldName} field is required` },
+          { status: 400 },
+        ),
+      };
+    }
+    const parsed: unknown = JSON.parse(raw.toString());
+    if (!Array.isArray(parsed)) {
+      return {
+        error: NextResponse.json(
+          { message: `${fieldName} must be a JSON array` },
+          { status: 400 },
+        ),
+      };
+    }
+    const invalidIndex = parsed.findIndex(
+      (item: unknown) => typeof item !== "string",
+    );
+    if (invalidIndex !== -1) {
+      return {
+        error: NextResponse.json(
+          { message: `${fieldName}[${invalidIndex}] must be a string` },
+          { status: 400 },
+        ),
+      };
+    }
+    return { data: parsed as string[] };
+  } catch {
+    return {
+      error: NextResponse.json(
+        { message: `Invalid JSON for ${fieldName}` },
+        { status: 400 },
+      ),
+    };
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     await connectToDatabase();
@@ -20,21 +65,12 @@ export async function POST(req: NextRequest) {
     }
 
     // Extract and process form data
-    const eventData: Record<string, any> = {};
+    const eventData: Record<string, unknown> = {};
 
     formData.forEach((value, key) => {
-      // Skip the image file as we've already extracted it
-      if (key === "image") return;
-
-      // Handle array fields (agenda, tags)
-      if (key === "agenda" || key === "tags") {
-        if (!eventData[key]) {
-          eventData[key] = [];
-        }
-        eventData[key].push(value.toString());
-      } else {
-        eventData[key] = value.toString();
-      }
+      // Skip image (handled above) and agenda/tags (parsed explicitly below)
+      if (key === "image" || key === "agenda" || key === "tags") return;
+      eventData[key] = value.toString();
     });
 
     // Normalize mode to match enum values
@@ -47,7 +83,20 @@ export async function POST(req: NextRequest) {
       } else if (modeStr.includes("offline") || modeStr.includes("person")) {
         eventData.mode = "offline";
       }
+    } else {
+      return NextResponse.json(
+        { message: "Invalid mode. Must be hybrid, online, or offline" },
+        { status: 400 },
+      );
     }
+
+    const tagsResult = parseRequiredJsonStringArray(formData, "tags");
+    if ("error" in tagsResult) return tagsResult.error;
+    const tags = tagsResult.data;
+
+    const agendaResult = parseRequiredJsonStringArray(formData, "agenda");
+    if ("error" in agendaResult) return agendaResult.error;
+    const agenda = agendaResult.data;
 
     // Upload image to Cloudinary
     const arrayBuffer = await file.arrayBuffer();
@@ -66,7 +115,7 @@ export async function POST(req: NextRequest) {
 
     eventData.image = (uploadResult as { secure_url: string }).secure_url;
 
-    const createdEvent = await Event.create(eventData);
+    const createdEvent = await Event.create({ ...eventData, tags, agenda });
 
     return NextResponse.json(
       { message: "Event created successfully", event: createdEvent },
@@ -89,10 +138,33 @@ export async function GET(req: NextRequest) {
   try {
     await connectToDatabase();
 
-    const events = await Event.find().sort({ createdAt: -1 });
+    const { searchParams } = new URL(req.url);
+    const page = Math.max(
+      1,
+      parseInt(searchParams.get("page") ?? "1", 10) || 1,
+    );
+    const limit = Math.min(
+      100,
+      Math.max(1, parseInt(searchParams.get("limit") ?? "20", 10) || 20),
+    );
+    const skip = (page - 1) * limit;
+
+    const [events, total] = await Promise.all([
+      Event.find().sort({ createdAt: -1 }).skip(skip).limit(limit),
+      Event.countDocuments(),
+    ]);
 
     return NextResponse.json(
-      { message: "Events fetched successfully", events },
+      {
+        message: "Events fetched successfully",
+        events,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+        },
+      },
       { status: 200 },
     );
   } catch (error) {

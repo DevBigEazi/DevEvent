@@ -1,6 +1,10 @@
 import BookEvent from "@/app/components/BookEvent";
+import EventCard from "@/app/components/EventCard";
+import { SerializedEvent } from "@/database";
+import { getSimilarEventBySlug } from "@/lib/actions/event.actions";
 import Image from "next/image";
 import { notFound } from "next/navigation";
+import { Suspense } from "react";
 
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL;
 
@@ -41,13 +45,15 @@ const EventTags = ({ tags }: { tags: string[] }) => (
   </div>
 );
 
-const EventDetails = async ({
+const EventDetailsContent = async ({
   params,
 }: {
   params: Promise<{ slug: string }>;
 }) => {
   const { slug } = await params;
-  const req = await fetch(`${BASE_URL}/api/events/${slug}`);
+  const req = await fetch(`${BASE_URL}/api/events/${slug}`, {
+    next: { revalidate: 3600 }, // Cache for 1 hour
+  });
 
   if (!req.ok) {
     return notFound();
@@ -59,10 +65,8 @@ const EventDetails = async ({
   }
 
   const {
-    title,
     description,
     overview,
-    venue,
     image,
     mode,
     location,
@@ -75,6 +79,8 @@ const EventDetails = async ({
   } = data.event;
 
   const bookings = 10;
+
+  const similarEvents = await getSimilarEventBySlug(slug);
 
   return (
     <section id="event">
@@ -121,14 +127,14 @@ const EventDetails = async ({
             />
           </section>
 
-          <EventAgenda agendaItems={JSON.parse(agenda[0])} />
+          <EventAgenda agendaItems={agenda} />
 
           <section className="flex-col-gap-2">
             <h2>About the organizer</h2>
             <p>{organizer}</p>
           </section>
 
-          <EventTags tags={JSON.parse(tags[0])} />
+          <EventTags tags={tags} />
         </div>
 
         {/* Right side -  Booking form*/}
@@ -142,11 +148,30 @@ const EventDetails = async ({
             ) : (
               <p>Be the first to book your spot!</p>
             )}
-          <BookEvent />
+            <BookEvent />
           </div>
         </aside>
+      </div>
+
+      <div className="flex flex-col w-full gap-2 pt-20">
+        <h2>Similar Events</h2>
+        <div className="events">
+          {similarEvents.length > 0 &&
+            similarEvents.map((similarEvent: SerializedEvent) => (
+              <EventCard key={similarEvent._id} {...similarEvent} />
+            ))}
+        </div>
       </div>
     </section>
   );
 };
+
+const EventDetails = ({ params }: { params: Promise<{ slug: string }> }) => {
+  return (
+    <Suspense fallback={<div>Loading event details...</div>}>
+      <EventDetailsContent params={params} />
+    </Suspense>
+  );
+};
+
 export default EventDetails;

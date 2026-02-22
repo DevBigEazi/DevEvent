@@ -5,7 +5,16 @@ import ExploreButton from "./components/ExploreButton";
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL;
 
 const page = async () => {
-  const res = await fetch(`${BASE_URL}/api/events`);
+  const res = await fetch(`${BASE_URL}/api/events`, {
+    next: { revalidate: 3600 }, // Cache for 1 hour
+  });
+  if (!res.ok) {
+    return (
+      <section>
+        <h1 className="text-center">Unable to load events</h1>
+      </section>
+    );
+  }
   const { events } = await res.json();
 
   return (
