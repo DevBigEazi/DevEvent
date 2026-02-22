@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Extract and process form data
-    const eventData: Record<string, any> = {};
+    const eventData: Record<string, unknown> = {};
 
     formData.forEach((value, key) => {
       // Skip the image file as we've already extracted it
@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
         if (!eventData[key]) {
           eventData[key] = [];
         }
-        eventData[key].push(value.toString());
+        (eventData[key] as unknown[]).push(value.toString());
       } else {
         eventData[key] = value.toString();
       }
@@ -48,6 +48,9 @@ export async function POST(req: NextRequest) {
         eventData.mode = "offline";
       }
     }
+
+    const tags = JSON.parse(formData.get("tags") as string);
+    const agenda = JSON.parse(formData.get("agenda") as string);
 
     // Upload image to Cloudinary
     const arrayBuffer = await file.arrayBuffer();
@@ -66,7 +69,7 @@ export async function POST(req: NextRequest) {
 
     eventData.image = (uploadResult as { secure_url: string }).secure_url;
 
-    const createdEvent = await Event.create(eventData);
+    const createdEvent = await Event.create({ ...eventData, tags, agenda });
 
     return NextResponse.json(
       { message: "Event created successfully", event: createdEvent },
@@ -85,7 +88,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
-export async function GET(req: NextRequest) {
+export async function GET() {
   try {
     await connectToDatabase();
 
