@@ -58,6 +58,15 @@ export async function POST(req: NextRequest) {
           { status: 400 },
         );
       }
+      const invalidTagIndex = tags.findIndex(
+        (item: unknown) => typeof item !== "string",
+      );
+      if (invalidTagIndex !== -1) {
+        return NextResponse.json(
+          { message: `tags[${invalidTagIndex}] must be a string` },
+          { status: 400 },
+        );
+      }
     } catch {
       return NextResponse.json(
         { message: "Invalid JSON for tags" },
@@ -77,6 +86,15 @@ export async function POST(req: NextRequest) {
       if (!Array.isArray(agenda)) {
         return NextResponse.json(
           { message: "Agenda must be a JSON array" },
+          { status: 400 },
+        );
+      }
+      const invalidAgendaIndex = agenda.findIndex(
+        (item: unknown) => typeof item !== "string",
+      );
+      if (invalidAgendaIndex !== -1) {
+        return NextResponse.json(
+          { message: `agenda[${invalidAgendaIndex}] must be a string` },
           { status: 400 },
         );
       }
@@ -123,14 +141,34 @@ export async function POST(req: NextRequest) {
   }
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
     await connectToDatabase();
 
-    const events = await Event.find().sort({ createdAt: -1 });
+    const { searchParams } = new URL(req.url);
+    const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10) || 1);
+    const limit = Math.min(
+      100,
+      Math.max(1, parseInt(searchParams.get("limit") ?? "20", 10) || 20),
+    );
+    const skip = (page - 1) * limit;
+
+    const [events, total] = await Promise.all([
+      Event.find().sort({ createdAt: -1 }).skip(skip).limit(limit),
+      Event.countDocuments(),
+    ]);
 
     return NextResponse.json(
-      { message: "Events fetched successfully", events },
+      {
+        message: "Events fetched successfully",
+        events,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+        },
+      },
       { status: 200 },
     );
   } catch (error) {
